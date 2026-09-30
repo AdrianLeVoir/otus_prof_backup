@@ -1,0 +1,65 @@
+# hw16: borgbackup — backup_server + client
+- name: Настройка backup-сервера
+  hosts: backup
+  become: true
+  tasks:
+    - name: Установить borgbackup
+      apt:
+        name: borgbackup
+        state: present
+        update_cache: true
+
+    - name: Создать пользователя borg
+      user:
+        name: borg
+        shell: /bin/bash
+        create_home: true
+
+    - name: Смонтировать /var/backup (отдельный диск)
+      mount:
+        path: /var/backup
+        src: /dev/sdb1
+        fstype: ext4
+        state: mounted
+
+    - name: Права на /var/backup
+      file:
+        path: /var/backup
+        owner: borg
+        group: borg
+        state: directory
+
+- name: Настройка client
+  hosts: client
+  become: true
+  tasks:
+    - name: Установить borgbackup
+      apt:
+        name: borgbackup
+        state: present
+        update_cache: true
+
+    - name: Скрипт бэкапа
+      copy:
+        src: ../borg-backup.sh
+        dest: /usr/local/bin/borg-backup.sh
+        mode: "0755"
+
+    - name: systemd service
+      copy:
+        src: ../borg-backup.service
+        dest: /etc/systemd/system/borg-backup.service
+        mode: "0644"
+
+    - name: systemd timer (каждые 5 минут)
+      copy:
+        src: ../borg-backup.timer
+        dest: /etc/systemd/system/borg-backup.timer
+        mode: "0644"
+
+    - name: Включить таймер
+      systemd:
+        name: borg-backup.timer
+        enabled: true
+        state: started
+        daemon_reload: true
